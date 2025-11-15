@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GCTU SIP - Lecturer Evaluation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1e40af;
+      --secondary: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --dark: #1f2937;
+      --light: #f9fafb;
+      --border: #e5e7eb;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      color: var(--dark);
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    /* Login Screen */
+    .login-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .login-card {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 50px 40px;
+      width: 100%;
+      max-width: 450px;
+      animation: slideUp 0.5s ease;
+    }
+    
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .logo {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .logo-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .logo-icon svg {
+      width: 50px;
+      height: 50px;
+      fill: white;
+    }
+    
+    .logo h1 {
+      font-size: 28px;
+      color: var(--dark);
+      margin-bottom: 10px;
+    }
+    
+    .logo p {
+      color: #6b7280;
+      font-size: 14px;
+    }
+    
+    .form-group {
+      margin-bottom: 25px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: var(--dark);
+      font-size: 14px;
+    }
+    
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      font-size: 15px;
+      transition: all 0.3s;
+    }
+    
+    .form-group input:focus, .form-group select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);
+    }
+    
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: slideDown 0.3s ease;
+    }
+    
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .alert-error {
+      background: #fee;
+      color: var(--danger);
+      border: 1px solid #fcc;
+    }
+    
+    .alert-success {
+      background: #efe;
+      color: var(--secondary);
+      border: 1px solid #cfc;
+    }
+    
+    /* Main App */
+    .app-wrapper {
+      display: none;
+    }
+    
+    .app-wrapper.active {
+      display: block;
+    }
+    
+    .header {
+      background: white;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--dark);
+    }
+    
+    .header-actions {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+    
+    .btn-logout {
+      padding: 8px 20px;
+      background: var(--danger);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.3s;
+    }
+    
+    .btn-logout:hover {
+      background: #dc2626;
+    }
+    
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      cursor: pointer;
+      padding: 8px;
+    }
+    
+    .hamburger span {
+      width: 25px;
+      height: 3px;
+      background: var(--dark);
+      border-radius: 2px;
+      transition: all 0.3s;
+    }
+    
+    .navbar {
+      background: white;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+    
+    .navbar-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: flex;
+      gap: 10px;
+    }
+    
+    .nav-item {
+      padding: 16px 24px;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.3s;
+      font-weight: 500;
+      color: #6b7280;
+    }
+    
+    .nav-item:hover {
+      color: var(--primary);
+      background: rgba(37, 99, 235, 0.05);
+    }
+    
+    .nav-item.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    
+    .main-content {
+      max-width: 1200px;
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      animation: fadeIn 0.5s ease;
+    }
+    
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    
+    .card-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: var(--dark);
+    }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin: 20px 0;
+    }
+    
+    .action-card {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      padding: 30px;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .action-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 40px rgba(37, 99, 235, 0.3);
+    }
+    
+    .action-card svg {
+      width: 40px;
+      height: 40px;
+      fill: white;
+    }
+    
+    .action-card h3 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .action-card p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    
+    .course-list {
+      margin-top: 20px;
+    }
+    
+    .course-item {
+      background: var(--light);
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 15px;
+      border-left: 4px solid var(--primary);
+      transition: all 0.3s;
+    }
+    
+    .course-item:hover {
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      transform: translateX(5px);
+    }
+    
+    .course-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 10px;
+    }
+    
+    .course-code {
+      font-weight: 700;
+      color: var(--primary);
+      font-size: 16px;
+    }
+    
+    .course-title {
+      color: var(--dark);
+      margin: 5px 0;
+      font-size: 15px;
+    }
+    
+    .course-lecturer {
+      color: #6b7280;
+      font-size: 14px;
+    }
+    
+    .badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .badge-success {
+      background: #d1fae5;
+      color: var(--secondary);
+    }
+    
+    .badge-warning {
+      background: #fef3c7;
+      color: var(--warning);
+    }
+    
+    .question-section {
+      margin: 30px 0;
+    }
+    
+    .question-category {
+      background: var(--light);
+      padding: 15px 20px;
+      border-radius: 10px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 20px;
+    }
+    
+    .question-item {
+      margin-bottom: 25px;
+    }
+    
+    .question-text {
+      font-weight: 500;
+      margin-bottom: 12px;
+      color: var(--dark);
+      font-size: 15px;
+    }
+    
+    .options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    
+    .option {
+      padding: 10px 20px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      background: white;
+    }
+    
+    .option:hover {
+      border-color: var(--primary);
+      background: rgba(37, 99, 235, 0.05);
+    }
+    
+    .option.selected {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: white;
+    }
+    
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top: 3px solid white;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    
+    .progress-bar {
+      height: 8px;
+      background: var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 20px 0;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      transition: width 0.3s;
+    }
+    
+    .summary-box {
+      background: var(--light);
+      padding: 20px;
+      border-radius: 12px;
+      margin: 20px 0;
+    }
+    
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .summary-item:last-child {
+      border-bottom: none;
+    }
+    
+    .btn-group {
+      display: flex;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    
+    .btn-secondary {
+      background: #6b7280;
+      color: white;
+    }
+    
+    .btn-secondary:hover {
+      background: #4b5563;
+    }
+    
+    .btn-success {
+      background: var(--secondary);
+      color: white;
+    }
+    
+    .btn-success:hover {
+      background: #059669;
+    }
+    
+    .about-section {
+      text-align: center;
+      padding: 40px 20px;
+    }
+    
+    .about-section h2 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      color: var(--dark);
+    }
+    
+    .about-section .developer {
+      font-size: 24px;
+      color: var(--primary);
+      font-weight: 700;
+      margin: 20px 0;
+    }
+    
+    .about-section .mission {
+      font-size: 18px;
+      color: #6b7280;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    .link-box {
+      background: var(--light);
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      margin: 20px 0;
+    }
+    
+    .btn-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 30px;
+      background: var(--primary);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+    
+    .btn-link:hover {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+    }
+    
+    .hidden {
+      display: none;
+    }
+    
+    @media (max-width: 768px) {
+      .login-card {
+        padding: 30px 25px;
+      }
+      
+      .navbar-content {
+        flex-direction: column;
+        padding: 0;
+        display: none;
+      }
+      
+      .navbar-content.mobile-open {
+        display: flex;
+      }
+      
+      .nav-item {
+        border-bottom: 1px solid var(--border);
+        border-left: none;
+      }
+      
+      .hamburger {
+        display: flex;
+      }
+      
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .header-title {
+        font-size: 16px;
+      }
+      
+      .btn-group {
+        flex-direction: column;
+      }
+      
+      .btn-group .btn {
+        width: 100%;
+      }
+      
+      .options {
+        flex-direction: column;
+      }
+      
+      .option {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Login Screen -->
+  <div id="loginScreen" class="login-wrapper">
+    <div class="login-card">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 10c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm5 7H7v-1c0-1.66 3.33-2.5 5-2.5s5 .84 5 2.5v1z"/>
+          </svg>
+        </div>
+        <h1>GCTU SIP</h1>
+        <p>Lecturer Evaluation System</p>
+      </div>
+      
+      <div id="loginAlert"></div>
+      
+      <form id="loginForm">
+        <div class="form-group">
+          <label>Student ID</label>
+          <input type="text" id="username" placeholder="1686468923@live.gctu.edu.gh" required>
+        </div>
+        
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="password" placeholder="Enter your password" required>
+        </div>
+        
+        <button type="submit" class="btn btn-primary" id="loginBtn">
+          <span>Login</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="appScreen" class="app-wrapper">
+    <div class="header">
+      <div class="header-content">
+        <div class="header-title">GCTU SIP Evaluation</div>
+        <div class="header-actions">
+          <div class="hamburger" id="hamburger">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <button class="btn-logout" id="logoutBtn">Logout</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="navbar">
+      <div class="navbar-content" id="navbar">
+        <div class="nav-item active" data-view="home">Home</div>
+        <div class="nav-item" data-view="evaluate">Evaluate All</div>
+        <div class="nav-item" data-view="select">Select Courses</div>
+        <div class="nav-item" data-view="about">About</div>
+      </div>
+    </div>
+    
+    <div class="main-content">
+      <!-- Home View -->
+      <div id="homeView" class="view-content">
+        <div class="card">
+          <h2 class="card-title">Welcome to GCTU SIP Evaluation</h2>
+          <p style="color: #6b7280; margin-bottom: 30px;">Choose an action to get started</p>
+          
+          <div class="grid">
+            <div class="action-card" data-action="evaluate">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+              </svg>
+              <h3>Evaluate All</h3>
+              <p>Evaluate all unevaluated lecturers at once</p>
+            </div>
+            
+            <div class="action-card" data-action="select" style="background: linear-gradient(135deg, #10b981, #059669);">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+              </svg>
+              <h3>Select Courses</h3>
+              <p>Choose specific courses to evaluate</p>
+            </div>
+            
+            <div class="action-card" data-action="about" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+              </svg>
+              <h3>About Developer</h3>
+              <p>Learn about the developer</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Evaluate All View -->
+      <div id="evaluateView" class="view-content hidden"></div>
+      
+      <!-- Select Courses View -->
+      <div id="selectView" class="view-content hidden"></div>
+      
+      <!-- About View -->
+      <div id="aboutView" class="view-content hidden">
+        <div class="card">
+          <div class="about-section">
+            <h2>About Developer</h2>
+            <div class="developer">TheNooB</div>
+            <p class="mission">To make students life easy</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
