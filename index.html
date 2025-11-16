@@ -2320,11 +2320,15 @@
           
           console.log('Final extracted - Code:', courseCode, 'Title:', courseTitle, 'Credits:', creditHours);
           
+          // Use 'id' field for semester courses, 'class_id' for enrolled courses
+          const enrollId = course.id || course.class_id || course.classId || courseObj.id || courseObj.class_id || courseObj.classId || '';
+          console.log('Using enrollment ID:', enrollId);
+          
           allCourses.push({
             code: courseCode,
             title: courseTitle,
             credit_hours: creditHours,
-            class_id: course.class_id || course.classId || courseObj.class_id || courseObj.classId || '',
+            class_id: enrollId,
             status: 'Not Registered'
           });
         });
@@ -2486,7 +2490,7 @@
             buttons: [{ text: 'I Understand', action: 'ok', primary: true }]
           });
         });
-      } else if (result) {
+      } else if (result && result.status === 'Success') {
         await showAlert('Course registered successfully!', 'Success', 'success');
         loadRegistrationView(); // Reload
       } else {
@@ -2511,7 +2515,7 @@
           if (result && result.error === 'not_eligible') {
             notEligible = true;
             failed++;
-          } else if (result) {
+          } else if (result && result.status === 'Success') {
             success++;
           } else {
             failed++;
