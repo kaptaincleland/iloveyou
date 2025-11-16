@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GCTU SIP - Lecturer Evaluation</title>
+  <title>GCTU SIP</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -863,6 +865,56 @@
         width: 100%;
       }
     }
+    
+    @media print {
+      @page {
+        margin: 0;
+        size: A4;
+      }
+      
+      body {
+        background: white;
+        padding: 0;
+        margin: 0;
+      }
+      
+      .header, .navbar, .no-print {
+        display: none !important;
+      }
+      
+      .main-content {
+        padding: 15mm;
+        margin: 0;
+      }
+      
+      .card {
+        box-shadow: none;
+        page-break-inside: avoid;
+        border: none;
+        padding: 0;
+        margin: 0;
+      }
+      
+      .results-card {
+        padding: 0;
+        margin: 0;
+      }
+      
+      .results-table {
+        page-break-inside: auto;
+      }
+      
+      .results-table tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+      
+      /* Hide print header/footer completely */
+      html {
+        margin: 0;
+        padding: 0;
+      }
+    }
   </style>
 </head>
 <body>
@@ -919,8 +971,8 @@
     <div class="navbar">
       <div class="navbar-content" id="navbar">
         <div class="nav-item active" data-view="home">Home</div>
-        <div class="nav-item" data-view="evaluate">Evaluate All</div>
-        <div class="nav-item" data-view="select">Select Courses</div>
+        <div class="nav-item" data-view="evaluate">Evaluate Lecturers</div>
+        <div class="nav-item" data-view="results">View Results</div>
         <div class="nav-item" data-view="about">About</div>
       </div>
     </div>
@@ -937,16 +989,16 @@
               <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
               </svg>
-              <h3>Evaluate All</h3>
-              <p>Submit evaluations for all pending lecturers in one go</p>
+              <h3>Evaluate Lecturers</h3>
+              <p>Evaluate all pending lecturers or select specific courses</p>
             </div>
             
-            <div class="action-card green" data-action="select">
+            <div class="action-card" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);" data-action="results">
               <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+                <path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
               </svg>
-              <h3>Select Courses</h3>
-              <p>Choose specific courses to evaluate individually</p>
+              <h3>View Results</h3>
+              <p>View and download your course results</p>
             </div>
             
             <div class="action-card orange" data-action="about">
@@ -966,6 +1018,9 @@
       <!-- Select Courses View -->
       <div id="selectView" class="view-content hidden"></div>
       
+      <!-- Results View -->
+      <div id="resultsView" class="view-content hidden"></div>
+      
       <!-- About View -->
       <div id="aboutView" class="view-content hidden">
         <div class="card">
@@ -982,10 +1037,38 @@
   <script>
     // Configuration
     const API_BASE = 'https://autoevaluate.pupujiger.workers.dev';
-    let authToken = null;
+    let authToken = localStorage.getItem('authToken') || null;
     let evaluationQuestions = null;
     let currentCourses = [];
     let commonAnswers = [];
+    
+    // Check if we have a saved token on page load
+    window.addEventListener('DOMContentLoaded', function() {
+      if (authToken) {
+        console.log('Found saved token, checking if valid...');
+        // Try to validate token by making a quick API call
+        validateToken();
+      }
+    });
+    
+    async function validateToken() {
+      try {
+        const result = await apiCall('/components_data/academic_year_option_list', 'GET');
+        if (result && !result.error) {
+          console.log('Token is valid, auto-logging in...');
+          loginScreen.style.display = 'none';
+          appScreen.classList.add('active');
+        } else {
+          console.log('Token expired, clearing...');
+          authToken = null;
+          localStorage.removeItem('authToken');
+        }
+      } catch (error) {
+        console.log('Token validation failed:', error);
+        authToken = null;
+        localStorage.removeItem('authToken');
+      }
+    }
 
     // DOM Elements
     const loginScreen = document.getElementById('loginScreen');
@@ -1026,12 +1109,33 @@
       }
 
       try {
+        console.log('API Call:', API_BASE + endpoint);
         const response = await fetch(API_BASE + endpoint, options);
-        const data = await response.json();
-        return data;
+        console.log('Response status:', response.status, response.statusText);
+        
+        // Handle 401 Unauthorized
+        if (response.status === 401) {
+          console.error('Unauthorized - token expired or invalid');
+          return { error: 'Unauthorized - Please login again', status: 401 };
+        }
+        
+        const contentType = response.headers.get('content-type');
+        console.log('Content-Type:', contentType);
+        
+        // Check if response is JSON or HTML
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          console.log('JSON response:', data);
+          return data;
+        } else {
+          // If it's HTML or other format, return as text
+          const text = await response.text();
+          console.log('Non-JSON response (first 200 chars):', text.substring(0, 200));
+          return { html: text, isHtml: true };
+        }
       } catch (error) {
         console.error('API Error:', error);
-        return null;
+        return { error: error.message };
       }
     }
 
@@ -1052,6 +1156,8 @@
 
       if (result && result.token) {
         authToken = result.token;
+        localStorage.setItem('authToken', authToken);
+        console.log('Login successful! Token saved:', authToken);
         loginScreen.style.display = 'none';
         appScreen.classList.add('active');
       } else {
@@ -1065,6 +1171,8 @@
     // Logout handler
     logoutBtn.addEventListener('click', function() {
       authToken = null;
+      localStorage.removeItem('authToken');
+      console.log('Logged out, token cleared');
       loginScreen.style.display = 'flex';
       appScreen.classList.remove('active');
       document.getElementById('username').value = '';
@@ -1110,10 +1218,10 @@
         document.getElementById('homeView').classList.remove('hidden');
       } else if (view === 'evaluate') {
         document.getElementById('evaluateView').classList.remove('hidden');
-        loadEvaluateAll();
-      } else if (view === 'select') {
-        document.getElementById('selectView').classList.remove('hidden');
-        loadSelectCourses();
+        loadEvaluateOptions();
+      } else if (view === 'results') {
+        document.getElementById('resultsView').classList.remove('hidden');
+        loadResultsView();
       } else if (view === 'about') {
         document.getElementById('aboutView').classList.remove('hidden');
       }
@@ -1493,6 +1601,384 @@
       html += '<button class="btn btn-primary" onclick="switchView(\'home\')" style="margin-top: 24px;">Back to Home</button></div>';
 
       container.innerHTML = html;
+    }
+
+    // Load Results View
+    async function loadResultsView() {
+      const container = document.getElementById('resultsView');
+      container.innerHTML = '<div class="card"><h2 class="card-title">Loading Results...</h2><div style="text-align: center; padding: 40px;"><div class="spinner"></div></div></div>';
+      
+      if (!authToken) {
+        container.innerHTML = '<div class="card"><h2 class="card-title">Authentication Required</h2><p style="color: var(--danger); margin: 20px 0;">Please login first to view your results.</p><button class="btn btn-primary" onclick="logoutBtn.click()">Go to Login</button></div>';
+        return;
+      }
+      
+      try {
+        console.log('Fetching results with token:', authToken.substring(0, 20) + '...');
+        
+        // Try both endpoints - regular and print
+        let result = await apiCall('/courses/results?page=1&limit=100', 'GET');
+        console.log('Results response:', result);
+        
+        // If we got HTML response (print view)
+        if (result && result.isHtml) {
+          console.log('Got HTML response, parsing...');
+          displayHtmlResults(container, result.html);
+          return;
+        }
+        
+        // Check if we got an error (like 401)
+        if (result && result.error) {
+          console.log('API returned error:', result.error);
+          if (result.error.toLowerCase().includes('unauthorized') || result.error.toLowerCase().includes('401')) {
+            authToken = null;
+            localStorage.removeItem('authToken');
+            container.innerHTML = '<div class="card"><h2 class="card-title">Session Expired</h2><p style="color: var(--danger); margin: 20px 0;">Your session has expired. Please login again.</p><button class="btn btn-primary" onclick="logoutBtn.click()">Go to Login</button></div>';
+            return;
+          }
+        }
+        
+        // If no records, try print endpoint
+        if (!result || !result.records || result.records.length === 0) {
+          console.log('No JSON records, trying print endpoint...');
+          const printResult = await apiCall('/courses/results?page=1&limit=100&export=print', 'GET');
+          console.log('Print response:', printResult);
+          
+          if (printResult && printResult.isHtml) {
+            displayHtmlResults(container, printResult.html);
+            return;
+          }
+          
+          container.innerHTML = '<div class="card"><h2 class="card-title">No Results Available</h2><p style="color: var(--gray); margin: 20px 0;">You don\'t have any results yet, or results are not available for the current semester.</p><div style="margin-top: 20px;"><button class="btn btn-primary" onclick="loadResultsView()">Retry</button><button class="btn btn-secondary" onclick="switchView(\'home\')">Back to Home</button></div></div>';
+          return;
+        }
+        
+        displayResultsTable(container, result);
+      } catch (error) {
+        console.error('Load results error:', error);
+        container.innerHTML = '<div class="card"><h2 class="card-title">Error Loading Results</h2><p style="color: var(--danger);">Failed to load results: ' + error.message + '</p><p style="color: var(--gray); margin-top: 10px;">This could be due to:<br>• Your session has expired - please login again<br>• Network connection issues<br>• The results service is temporarily unavailable</p><div style="margin-top: 20px;"><button class="btn btn-primary" onclick="loadResultsView()">Retry</button><button class="btn btn-secondary" onclick="logoutBtn.click()">Login Again</button></div></div>';
+      }
+    }
+
+    // Display HTML results (when API returns HTML)
+    function displayHtmlResults(container, htmlContent) {
+      // Parse the HTML to extract table data
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, 'text/html');
+      
+      // Try to find the results table
+      const table = doc.querySelector('table');
+      
+      if (!table) {
+        // If no table, just display the HTML content styled
+        let html = '<div class="card">';
+        html += '<div class="result-header" style="text-align: center; margin-bottom: 30px;">';
+        html += '<h2 class="card-title">Course Results</h2>';
+        html += '<p style="color: var(--gray);">Academic Performance Overview</p>';
+        html += '</div>';
+        html += '<div style="margin-bottom: 30px; display: flex; gap: 12px; flex-wrap: wrap;" class="no-print">';
+        html += '<button class="btn btn-success" onclick="downloadResultsPDF()"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>Download PDF</button>';
+        html += '<button class="btn btn-primary" onclick="window.print()"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>Print</button>';
+        html += '<button class="btn btn-secondary" onclick="switchView(\'home\')">Back to Home</button>';
+        html += '</div>';
+        html += '<div id="printableResults" style="overflow-x: auto;">' + htmlContent + '</div>';
+        html += '<style>#printableResults table { font-size: 14px !important; } #printableResults th { font-size: 15px !important; padding: 10px !important; } #printableResults td { font-size: 14px !important; padding: 10px !important; } #printableResults h1 { font-size: 22px !important; } #printableResults h2 { font-size: 20px !important; } #printableResults h3 { font-size: 18px !important; } #printableResults h4, #printableResults h5, #printableResults h6 { font-size: 16px !important; }</style>';
+        html += '</div>';
+        container.innerHTML = html;
+        return;
+      }
+      
+      // Extract data from table
+      const rows = table.querySelectorAll('tbody tr');
+      const records = [];
+      
+      rows.forEach(function(row) {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 5) {
+          records.push({
+            course_code: cells[0].textContent.trim(),
+            course_title: cells[1].textContent.trim(),
+            lecturer_name: cells[2].textContent.trim(),
+            grade: cells[3].textContent.trim(),
+            credit_hours: cells[4].textContent.trim(),
+            semester: cells[5] ? cells[5].textContent.trim() : 'N/A'
+          });
+        }
+      });
+      
+      if (records.length > 0) {
+        displayResultsTable(container, { records: records, pagination: { totalRecords: records.length } });
+      } else {
+        // Display the raw HTML with balanced styling
+        let html = '<div style="max-width: 1100px; margin: 0 auto;">';
+        html += '<div class="card">';
+        html += '<div class="result-header" style="text-align: center; margin-bottom: 30px;">';
+        html += '<h2 class="card-title">Course Results</h2>';
+        html += '</div>';
+        html += '<div style="margin-bottom: 30px; display: flex; gap: 12px; flex-wrap: wrap;" class="no-print">';
+        html += '<button class="btn btn-success" onclick="downloadResultsPDF()"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>Download PDF</button>';
+        html += '<button class="btn btn-primary" onclick="window.print()"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>Print</button>';
+        html += '<button class="btn btn-secondary" onclick="switchView(\'home\')">Back to Home</button>';
+        html += '</div>';
+        html += '<div id="printableResults" style="overflow-x: auto; width: 100%;">' + htmlContent + '</div>';
+        html += '<style>';
+        html += '#printableResults { width: 100%; overflow-x: auto; }';
+        html += '#printableResults table { width: 100% !important; font-size: 14px !important; border-collapse: collapse !important; table-layout: auto !important; }';
+        html += '#printableResults th { font-size: 15px !important; font-weight: 700 !important; padding: 12px 8px !important; background: #f8f9fa !important; white-space: nowrap !important; }';
+        html += '#printableResults td { font-size: 14px !important; padding: 10px 8px !important; border-bottom: 1px solid #e0e0e0 !important; }';
+        html += '#printableResults h1 { font-size: 24px !important; margin: 12px 0 !important; font-weight: 700 !important; }';
+        html += '#printableResults h2 { font-size: 20px !important; margin: 10px 0 !important; font-weight: 700 !important; }';
+        html += '#printableResults h3 { font-size: 18px !important; margin: 10px 0 !important; font-weight: 700 !important; }';
+        html += '#printableResults h4 { font-size: 16px !important; margin: 8px 0 !important; font-weight: 600 !important; }';
+        html += '#printableResults h5, #printableResults h6 { font-size: 15px !important; margin: 6px 0 !important; font-weight: 600 !important; }';
+        html += '#printableResults p { font-size: 14px !important; margin: 6px 0 !important; }';
+        html += '#printableResults strong, #printableResults b { font-weight: 700 !important; }';
+        html += '#printableResults small { font-size: 13px !important; }';
+        html += '</style>';
+        html += '</div></div>';
+        container.innerHTML = html;
+      }
+    }
+
+    // Display results table
+    function displayResultsTable(container, data) {
+      const records = data.records || [];
+      const totalCredits = records.reduce(function(sum, r) { return sum + (parseFloat(r.credit_hours) || 0); }, 0);
+      
+      let html = '<div style="max-width: 900px; margin: 0 auto;">';
+      html += '<div class="card" id="printableResults" style="border-radius: 16px; padding: 30px;">';
+      html += '<div class="result-header" style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid var(--border);">';
+      html += '<h2 class="card-title" style="margin-bottom: 10px; font-size: 36px;">Course Results</h2>';
+      html += '<p style="color: var(--gray); font-size: 20px; font-weight: 500;">Academic Performance Overview</p>';
+      html += '</div>';
+      
+      html += '<div class="stats-grid" style="margin-bottom: 40px;">';
+      html += '<div class="stat-card"><div class="stat-value">' + records.length + '</div><div class="stat-label">Total Courses</div></div>';
+      html += '<div class="stat-card"><div class="stat-value">' + totalCredits.toFixed(1) + '</div><div class="stat-label">Total Credits</div></div>';
+      html += '<div class="stat-card"><div class="stat-value">' + (data.pagination ? data.pagination.totalRecords : records.length) + '</div><div class="stat-label">All Records</div></div>';
+      html += '</div>';
+      
+      html += '<div style="margin-bottom: 30px; display: flex; gap: 12px; flex-wrap: wrap;" class="no-print">';
+      html += '<button class="btn btn-success" onclick="downloadResultsPDF()"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>Download PDF</button>';
+      html += '<button class="btn btn-primary" onclick="window.print()"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>Print</button>';
+      html += '<button class="btn btn-secondary" onclick="switchView(\'home\')">Back to Home</button>';
+      html += '</div>';
+      
+      html += '<table class="results-table" style="width: 100%; border-collapse: collapse; margin-top: 30px;">';
+      html += '<thead style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white;">';
+      html += '<tr><th style="padding: 22px; text-align: left; font-weight: 700; font-size: 17px; text-transform: uppercase; letter-spacing: 0.5px;">Course</th>';
+      html += '<th style="padding: 22px; text-align: left; font-weight: 700; font-size: 17px; text-transform: uppercase; letter-spacing: 0.5px;">Lecturer</th>';
+      html += '<th style="padding: 22px; text-align: left; font-weight: 700; font-size: 17px; text-transform: uppercase; letter-spacing: 0.5px;">Grade</th>';
+      html += '<th style="padding: 22px; text-align: left; font-weight: 700; font-size: 17px; text-transform: uppercase; letter-spacing: 0.5px;">Credits</th>';
+      html += '<th style="padding: 22px; text-align: left; font-weight: 700; font-size: 17px; text-transform: uppercase; letter-spacing: 0.5px;">Semester</th></tr>';
+      html += '</thead><tbody>';
+      
+      records.forEach(function(record) {
+        const grade = record.grade || 'N/A';
+        let gradeClass = '';
+        if (grade.toUpperCase().startsWith('A')) gradeClass = 'background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: var(--success);';
+        else if (grade.toUpperCase().startsWith('B')) gradeClass = 'background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #2563eb;';
+        else if (grade.toUpperCase().startsWith('C')) gradeClass = 'background: linear-gradient(135deg, #fef3c7, #fde68a); color: #d97706;';
+        else if (grade.toUpperCase().startsWith('D')) gradeClass = 'background: linear-gradient(135deg, #fed7aa, #fdba74); color: #ea580c;';
+        else if (grade.toUpperCase().startsWith('F')) gradeClass = 'background: linear-gradient(135deg, #fee, #fcc); color: var(--danger);';
+        
+        html += '<tr style="border-bottom: 1px solid var(--border);">';
+        html += '<td style="padding: 22px;"><div style="font-weight: 800; color: var(--primary); font-size: 21px;">' + (record.course_code || 'N/A') + '</div>';
+        html += '<div style="color: var(--dark); font-weight: 600; margin: 6px 0; font-size: 17px; line-height: 1.4;">' + (record.course_title || 'N/A') + '</div></td>';
+        html += '<td style="padding: 22px; color: var(--gray); font-size: 17px; line-height: 1.5;">' + (record.lecturer_name || record.staff_fullname || 'N/A') + '</td>';
+        html += '<td style="padding: 22px;"><span style="display: inline-block; padding: 14px 22px; border-radius: 10px; font-weight: 700; font-size: 21px; ' + gradeClass + '">' + grade + '</span></td>';
+        html += '<td style="padding: 22px; font-weight: 700; text-align: center; font-size: 20px;">' + (record.credit_hours || 'N/A') + '</td>';
+        html += '<td style="padding: 22px; font-size: 17px;">' + (record.semester ? 'Semester ' + record.semester : 'N/A') + '</td>';
+        html += '</tr>';
+      });
+      
+      html += '</tbody></table>';
+      
+      html += '<div style="text-align: center; margin-top: 35px; padding-top: 25px; border-top: 2px solid var(--border); color: var(--gray); font-size: 17px;" class="print-footer">';
+      html += '<p style="font-size: 20px; margin-bottom: 8px;"><strong>Ghana Communication Technology University</strong></p>';
+      html += '<p>Academic Records</p>';
+      html += '</div></div></div>';
+      
+      container.innerHTML = html;
+    }
+
+    // Load Evaluate Options (new unified entry point)
+    async function loadEvaluateOptions() {
+      const container = document.getElementById('evaluateView');
+      container.innerHTML = '<div class="card"><h2 class="card-title">Loading...</h2></div>';
+
+      const years = await apiCall('/components_data/academic_year_option_list', 'GET');
+
+      let html = '<div class="card"><h2 class="card-title">Evaluate Lecturers</h2>';
+      html += '<p class="card-subtitle">Select academic year and semester</p>';
+      
+      // Check if 2025/2026 evaluations are available
+      html += '<div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 8px;">';
+      html += '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#856404" style="display: inline-block; vertical-align: middle; margin-right: 10px;">';
+      html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />';
+      html += '</svg>';
+      html += '<strong style="color: #856404;">Note:</strong> <span style="color: #856404;">Evaluations for 2025/2026 academic year are not yet available. Please check back later or select a previous year.</span>';
+      html += '</div>';
+      
+      html += '<div class="form-group"><label>Academic Year</label><select id="yearSelectEval" class="form-group input">';
+
+      if (years && years.length > 0) {
+        years.forEach(function(year) {
+          const selected = year.value === '2024/2025' ? ' selected' : '';
+          html += '<option value="' + year.value + '"' + selected + '>' + year.label + '</option>';
+        });
+      }
+
+      html += '</select></div>';
+      html += '<div class="form-group"><label>Semester</label><select id="semesterSelectEval" class="form-group input">';
+      html += '<option value="1">Semester 1</option><option value="2">Semester 2</option></select></div>';
+      html += '<div class="btn-group">';
+      html += '<button class="btn btn-primary" id="evalAllBtn">Evaluate All Lecturers</button>';
+      html += '<button class="btn btn-success" id="evalSelectBtn">Select Specific Courses</button>';
+      html += '</div></div>';
+
+      container.innerHTML = html;
+
+      document.getElementById('evalAllBtn').addEventListener('click', async function() {
+        const year = document.getElementById('yearSelectEval').value;
+        const semester = document.getElementById('semesterSelectEval').value;
+        
+        if (year === '2025/2026') {
+          alert('Evaluations for 2025/2026 academic year are not yet available. Please select a previous year.');
+          return;
+        }
+        
+        const courses = await loadCourses(year, semester);
+        const unevaluated = courses.filter(function(c) {
+          return c.evaluation_status !== '1' && c.evaluation_status !== 1;
+        });
+
+        if (unevaluated.length === 0) {
+          showAllComplete(container, courses, year, semester);
+        } else {
+          displayCourseList(container, unevaluated, year, semester, true);
+        }
+      });
+
+      document.getElementById('evalSelectBtn').addEventListener('click', async function() {
+        const year = document.getElementById('yearSelectEval').value;
+        const semester = document.getElementById('semesterSelectEval').value;
+        
+        if (year === '2025/2026') {
+          alert('Evaluations for 2025/2026 academic year are not yet available. Please select a previous year.');
+          return;
+        }
+        
+        const courses = await loadCourses(year, semester);
+        const unevaluated = courses.filter(function(c) {
+          return c.evaluation_status !== '1' && c.evaluation_status !== 1;
+        });
+
+        if (unevaluated.length === 0) {
+          showAllComplete(container, courses, year, semester);
+        } else {
+          displaySelectableCourses(container, unevaluated, year, semester);
+        }
+      });
+    }
+
+    // Show all complete message
+    function showAllComplete(container, courses, year, semester) {
+      const evaluated = courses.filter(function(c) { return c.evaluation_status === '1' || c.evaluation_status === 1; }).length;
+      
+      let html = '<div class="card">';
+      html += '<div style="text-align: center; margin-bottom: 30px;">';
+      html += '<svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color: var(--success); margin-bottom: 20px;">';
+      html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />';
+      html += '</svg>';
+      html += '<h2 class="card-title">All Evaluations Complete!</h2>';
+      html += '<p style="color: var(--gray); margin: 20px 0;">You have successfully completed all lecturer evaluations for ' + year + ' Semester ' + semester + '.</p>';
+      html += '</div>';
+      html += '<div class="stats-grid">';
+      html += '<div class="stat-card"><div class="stat-value">' + courses.length + '</div><div class="stat-label">Total Courses</div></div>';
+      html += '<div class="stat-card"><div class="stat-value">' + evaluated + '</div><div class="stat-label">Completed</div></div>';
+      html += '</div>';
+      html += '<button class="btn btn-primary" onclick="switchView(\'home\')" style="margin-top: 24px;">Back to Home</button></div>';
+      
+      container.innerHTML = html;
+    }
+
+    // Download results as PDF directly
+    async function downloadResultsPDF() {
+      const element = document.getElementById('printableResults');
+      
+      if (!element) {
+        alert('No results to download. Please try again.');
+        return;
+      }
+      
+      // Show animated loading indicator
+      const loadingOverlay = document.createElement('div');
+      loadingOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center;';
+      loadingOverlay.innerHTML = '<div style="background: white; padding: 40px 50px; border-radius: 16px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.3);"><div style="width: 60px; height: 60px; border: 4px solid #e0e0e0; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div><p style="color: var(--dark); font-weight: 700; font-size: 18px; margin-bottom: 8px;">Generating PDF...</p><p style="color: var(--gray); font-size: 14px;">Please wait a moment</p></div><style>@keyframes spin { to { transform: rotate(360deg); }}</style>';
+      document.body.appendChild(loadingOverlay);
+      
+      try {
+        // Use html2canvas to capture the element with better settings
+        const canvas = await html2canvas(element, {
+          scale: 3,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          letterRendering: true,
+          allowTaint: false,
+          foreignObjectRendering: false
+        });
+        
+        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+        
+        // Create PDF using jsPDF
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4',
+          compress: true
+        });
+        
+        const imgWidth = 190;
+        const pageHeight = 277;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 10;
+        
+        // Add image to PDF
+        pdf.addImage(imgData, 'JPEG', 10, position, imgWidth, imgHeight, '', 'FAST');
+        heightLeft -= pageHeight;
+        
+        // Add new pages if content is longer than one page
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight + 10;
+          pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 10, position, imgWidth, imgHeight, '', 'FAST');
+          heightLeft -= pageHeight;
+        }
+        
+        // Generate filename with current date
+        const filename = 'GCTU_Results_' + new Date().toISOString().split('T')[0] + '.pdf';
+        
+        // Save the PDF
+        pdf.save(filename);
+        
+        // Remove loading overlay with fade out
+        setTimeout(function() {
+          loadingOverlay.style.opacity = '0';
+          loadingOverlay.style.transition = 'opacity 0.3s';
+          setTimeout(function() {
+            document.body.removeChild(loadingOverlay);
+          }, 300);
+        }, 500);
+        
+      } catch (error) {
+        console.error('PDF generation error:', error);
+        document.body.removeChild(loadingOverlay);
+        alert('Failed to generate PDF. Please try using the Print button instead.');
+      }
     }
   </script>
 </body>
