@@ -2148,6 +2148,8 @@
       const data = await apiCall('/courses/index/', 'GET');
       
       console.log('Registration data received:', data);
+      console.log('Type of data:', typeof data, 'Is Array:', Array.isArray(data));
+      console.log('Has semesterCourseList:', !!data?.semesterCourseList, 'Length:', data?.semesterCourseList?.length);
       
       if (!data) {
         return; // Token expired, handled by apiCall
@@ -2165,7 +2167,7 @@
       } else if (data && data.courses) {
         displayCoursesList(container, data.courses);
       } else {
-        container.innerHTML = '<div class="card"><h2 class="card-title">No Courses Found</h2><p>No courses available for registration.</p></div>';
+        container.innerHTML = '<div class="card"><h2 class="card-title">No Courses Found</h2><p>No courses available for registration.</p><button class="btn btn-secondary" onclick="switchView(\'home\')">Back to Home</button></div>';
       }
     }
     
@@ -2258,21 +2260,51 @@
       
       // Process semester courses
       if (data.semesterCourseList && Array.isArray(data.semesterCourseList)) {
-        data.semesterCourseList.forEach(function(course) {
-          console.log('Semester course:', course);
-          // The course structure has: {class_id, course_id, course: {code, course_name, ...}}
+        console.log('Processing', data.semesterCourseList.length, 'semester courses');
+        data.semesterCourseList.forEach(function(course, idx) {
+          console.log('=== Semester course', idx, '===');
+          console.log('Full object keys:', Object.keys(course));
+          console.log('course.course exists?', !!course.course);
+          if (course.course) {
+            console.log('course.course keys:', Object.keys(course.course));
+          }
+          
+          // The course structure can be: {class_id, course_id, course: {code, name, ...}}
+          // Or it could be flat: {class_id, code, name, ...}
           const courseObj = course.course || course;
           
-          // Get title from nested course object
-          const courseTitle = courseObj.course_name || courseObj.name || courseObj.course_title || courseObj.title || 
-                             courseObj.courseName || courseObj.courseTitle || 
-                             course.course_name || course.name || course.course_title || course.title || 'N/A';
-          const courseCode = courseObj.code || courseObj.course_code || courseObj.courseCode || 
-                            course.code || course.course_code || course.courseCode || '';
-          const creditHours = courseObj.credit_hours || courseObj.credits || courseObj.creditHours || 
-                             course.credit_hours || course.credits || course.creditHours || '';
+          // Try all possible property names for title - be more aggressive
+          let courseTitle = null;
+          let courseCode = null;
+          let creditHours = null;
           
-          console.log('Extracted - Code:', courseCode, 'Title:', courseTitle, 'Credits:', creditHours);
+          // Search recursively for title/name
+          function findProperty(obj, possibleNames) {
+            if (!obj) return null;
+            for (let prop of possibleNames) {
+              if (obj[prop]) {
+                console.log('Found', prop, '=', obj[prop]);
+                return obj[prop];
+              }
+            }
+            // Check nested objects
+            for (let key in obj) {
+              if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+                let result = findProperty(obj[key], possibleNames);
+                if (result) return result;
+              }
+            }
+            return null;
+          }
+          
+          console.log('Searching for title...');
+          courseTitle = findProperty(course, ['course_name', 'name', 'course_title', 'title', 'courseName', 'courseTitle']) || 'N/A';
+          console.log('Searching for code...');
+          courseCode = findProperty(course, ['code', 'course_code', 'courseCode']) || '';
+          console.log('Searching for credits...');
+          creditHours = findProperty(course, ['credit_hours', 'credits', 'creditHours']) || '';
+          
+          console.log('Final extracted - Code:', courseCode, 'Title:', courseTitle, 'Credits:', creditHours);
           
           allCourses.push({
             code: courseCode,
@@ -2287,13 +2319,27 @@
       // Mark enrolled courses as registered
       if (data.enrolledCoueseList && Array.isArray(data.enrolledCoueseList)) {
         data.enrolledCoueseList.forEach(function(enrolled) {
-          console.log('Enrolled course:', enrolled);
+          console.log('Enrolled course full object:', JSON.stringify(enrolled, null, 2));
           const courseObj = enrolled.course || enrolled;
-          const courseTitle = courseObj.course_name || courseObj.course_title || courseObj.title || 
-                             courseObj.name || courseObj.courseName || courseObj.courseTitle || 
-                             enrolled.course_name || enrolled.course_title || enrolled.title || enrolled.name || 'N/A';
-          const courseCode = courseObj.code || courseObj.course_code || courseObj.courseCode || 
-                            enrolled.code || enrolled.course_code || enrolled.courseCode || '';
+          
+          // Search recursively for properties
+          function findProperty(obj, possibleNames) {
+            if (!obj) return null;
+            for (let prop of possibleNames) {
+              if (obj[prop]) return obj[prop];
+            }
+            // Check nested objects
+            for (let key in obj) {
+              if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+                let result = findProperty(obj[key], possibleNames);
+                if (result) return result;
+              }
+            }
+            return null;
+          }
+          
+          let courseTitle = findProperty(enrolled, ['course_name', 'name', 'course_title', 'title', 'courseName', 'courseTitle']) || 'N/A';
+          let courseCode = findProperty(enrolled, ['code', 'course_code', 'courseCode']) || '';
           
           const course = allCourses.find(c => c.class_id === (enrolled.class_id || enrolled.classId));
           if (course) {
@@ -2310,8 +2356,7 @@
             allCourses.push({
               code: courseCode,
               title: courseTitle,
-              credit_hours: courseObj.credit_hours || courseObj.credits || courseObj.creditHours || 
-                           enrolled.credit_hours || enrolled.credits || enrolled.creditHours || '',
+              credit_hours: findProperty(enrolled, ['credit_hours', 'credits', 'creditHours']) || '',
               class_id: enrolled.class_id || enrolled.classId || '',
               status: 'Registered'
             });
