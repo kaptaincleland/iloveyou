@@ -2494,7 +2494,15 @@
         await showAlert('Course registered successfully!', 'Success', 'success');
         loadRegistrationView(); // Reload
       } else {
-        await showAlert('Failed to register course. Please try again later.', 'Registration Failed', 'error');
+        // Any other error - also check if it might be eligibility
+        requestAnimationFrame(function() {
+          showCustomDialog({
+            title: 'Enrollment Requirements Not Met',
+            message: 'You currently do not meet the eligibility criteria for course enrollment in the current semester. To proceed with course enrollment, kindly ensure that you have made a payment of at least 50% of your school fees to fulfill the enrollment requirements.',
+            type: 'warning',
+            buttons: [{ text: 'I Understand', action: 'ok', primary: true }]
+          });
+        });
       }
     }
     
