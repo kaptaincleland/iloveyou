@@ -697,6 +697,17 @@
       transform: translateY(-2px);
     }
     
+    .btn-danger {
+      background: linear-gradient(135deg, var(--danger), #dc2626);
+      color: white;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+    
+    .btn-danger:hover {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      transform: translateY(-2px);
+    }
+    
     .about-section {
       text-align: center;
       padding: 60px 24px;
@@ -915,6 +926,141 @@
         padding: 0;
       }
     }
+    
+    /* Custom Dialog Styles */
+    .custom-dialog-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      padding: 20px;
+      animation: fadeIn 0.2s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+    
+    .custom-dialog {
+      background: white;
+      border-radius: 20px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+    }
+    
+    .custom-dialog-header {
+      padding: 30px 30px 20px;
+      text-align: center;
+    }
+    
+    .custom-dialog-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+    
+    .custom-dialog-icon.warning {
+      background: linear-gradient(135deg, #fef3c7, #fde68a);
+    }
+    
+    .custom-dialog-icon.error {
+      background: linear-gradient(135deg, #fee2e2, #fecaca);
+    }
+    
+    .custom-dialog-icon.success {
+      background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    }
+    
+    .custom-dialog-icon.info {
+      background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    }
+    
+    .custom-dialog-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--dark);
+      margin: 0 0 12px 0;
+    }
+    
+    .custom-dialog-message {
+      font-size: 16px;
+      color: var(--gray);
+      line-height: 1.6;
+      margin: 0;
+      padding: 0 10px;
+    }
+    
+    .custom-dialog-footer {
+      padding: 20px 30px 30px;
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    
+    .custom-dialog-footer .btn {
+      flex: 1;
+      max-width: 150px;
+    }
+    
+    @media (max-width: 768px) {
+      .custom-dialog {
+        margin: 20px;
+        max-width: calc(100% - 40px);
+      }
+      
+      .custom-dialog-header {
+        padding: 24px 24px 16px;
+      }
+      
+      .custom-dialog-icon {
+        width: 60px;
+        height: 60px;
+      }
+      
+      .custom-dialog-title {
+        font-size: 20px;
+      }
+      
+      .custom-dialog-message {
+        font-size: 14px;
+      }
+      
+      .custom-dialog-footer {
+        padding: 16px 24px 24px;
+        flex-direction: column;
+      }
+      
+      .custom-dialog-footer .btn {
+        max-width: none;
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
@@ -982,7 +1128,7 @@
       <!-- Home View -->
       <div id="homeView" class="view-content">
         <div class="card">
-          <h2 class="card-title">Welcome to GCTU SIP Evaluation</h2>
+          <h2 class="card-title" id="welcomeTitle">Welcome to GCTU SIP Evaluation</h2>
           <p class="card-subtitle">Streamline your lecturer evaluations for Academic Year 2025/2026</p>
           
           <div class="grid">
@@ -1052,7 +1198,82 @@
     let authToken = localStorage.getItem('authToken') || null;
     let evaluationQuestions = null;
     let currentCourses = [];
+    let userName = localStorage.getItem('userName') || null;
     let commonAnswers = [];
+    
+    // Custom Dialog Functions
+    function showCustomDialog(options) {
+      return new Promise(function(resolve) {
+        const overlay = document.createElement('div');
+        overlay.className = 'custom-dialog-overlay';
+        
+        const iconSvg = {
+          warning: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>',
+          error: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+          success: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>',
+          info: '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+        };
+        
+        let buttonsHTML = '';
+        if (options.buttons) {
+          options.buttons.forEach(function(btn) {
+            const btnClass = btn.primary ? 'btn-primary' : (btn.type === 'danger' ? 'btn-danger' : 'btn-secondary');
+            buttonsHTML += '<button class="btn ' + btnClass + '" data-action="' + btn.action + '">' + btn.text + '</button>';
+          });
+        }
+        
+        overlay.innerHTML = '<div class="custom-dialog">' +
+          '<div class="custom-dialog-header">' +
+            '<div class="custom-dialog-icon ' + (options.type || 'info') + '">' +
+              (iconSvg[options.type] || iconSvg.info) +
+            '</div>' +
+            '<h3 class="custom-dialog-title">' + (options.title || 'Alert') + '</h3>' +
+            '<p class="custom-dialog-message">' + (options.message || '') + '</p>' +
+          '</div>' +
+          '<div class="custom-dialog-footer">' + buttonsHTML + '</div>' +
+        '</div>';
+        
+        document.body.appendChild(overlay);
+        
+        // Add click handlers
+        overlay.querySelectorAll('.btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            const action = this.getAttribute('data-action');
+            document.body.removeChild(overlay);
+            resolve(action);
+          });
+        });
+        
+        // Click outside to close
+        overlay.addEventListener('click', function(e) {
+          if (e.target === overlay) {
+            document.body.removeChild(overlay);
+            resolve(null);
+          }
+        });
+      });
+    }
+    
+    function showAlert(message, title, type) {
+      return showCustomDialog({
+        title: title || 'Alert',
+        message: message,
+        type: type || 'info',
+        buttons: [{ text: 'OK', action: 'ok', primary: true }]
+      });
+    }
+    
+    function showConfirm(message, title) {
+      return showCustomDialog({
+        title: title || 'Confirm',
+        message: message,
+        type: 'warning',
+        buttons: [
+          { text: 'No', action: 'no', type: 'secondary' },
+          { text: 'Yes', action: 'yes', primary: true }
+        ]
+      });
+    }
     
     // Check if we have a saved token on page load
     window.addEventListener('DOMContentLoaded', function() {
@@ -1070,6 +1291,8 @@
           console.log('Token is valid, auto-logging in...');
           loginScreen.style.display = 'none';
           appScreen.classList.add('active');
+          // Fetch and display user name
+          fetchAndDisplayUserName();
         } else {
           console.log('Token expired, clearing...');
           authToken = null;
@@ -1079,6 +1302,62 @@
         console.log('Token validation failed:', error);
         authToken = null;
         localStorage.removeItem('authToken');
+      }
+    }
+    
+    // Fetch and display user name from results
+    async function fetchAndDisplayUserName() {
+      if (userName) {
+        // Already have cached name
+        updateWelcomeMessage(userName);
+        return;
+      }
+      
+      try {
+        // Try to fetch user name from results
+        const result = await apiCall('/courses/results?page=1&limit=1', 'GET');
+        
+        if (result && result.isHtml && result.html) {
+          // Parse HTML to extract name
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(result.html, 'text/html');
+          
+          // Look for name in common patterns
+          const namePatterns = [
+            /Name:\s*([^<\n]+)/i,
+            /Student Name:\s*([^<\n]+)/i,
+            /<strong>Name:<\/strong>\s*([^<\n]+)/i
+          ];
+          
+          for (let pattern of namePatterns) {
+            const match = result.html.match(pattern);
+            if (match && match[1]) {
+              userName = match[1].trim();
+              localStorage.setItem('userName', userName);
+              updateWelcomeMessage(userName);
+              return;
+            }
+          }
+          
+          // Try to find from table cells or divs
+          const textContent = doc.body.textContent || doc.body.innerText || '';
+          const nameMatch = textContent.match(/Name:\s*(.+?)(?:\n|Student ID)/i);
+          if (nameMatch && nameMatch[1]) {
+            userName = nameMatch[1].trim();
+            localStorage.setItem('userName', userName);
+            updateWelcomeMessage(userName);
+          }
+        }
+      } catch (error) {
+        console.log('Could not fetch user name:', error);
+        // Not critical, just use generic greeting
+      }
+    }
+    
+    function updateWelcomeMessage(name) {
+      const welcomeTitle = document.getElementById('welcomeTitle');
+      if (welcomeTitle && name) {
+        welcomeTitle.textContent = 'Welcome, ' + name + '!';
       }
     }
 
@@ -1094,8 +1373,8 @@
     const navItems = document.querySelectorAll('.nav-item');
     const viewContents = document.querySelectorAll('.view-content');
 
-    // Show alert
-    function showAlert(message, type) {
+    // Show login alert (for login page)
+    function showLoginAlert(message, type) {
       const alertClass = type === 'error' ? 'alert-error' : 'alert-success';
       loginAlert.innerHTML = '<div class="alert ' + alertClass + '">' + message + '</div>';
       setTimeout(function() {
@@ -1136,9 +1415,15 @@
           // Show login screen with message
           loginScreen.style.display = 'flex';
           appScreen.classList.remove('active');
-          showAlert('Your session has expired. Please login again.', 'error');
+          showAlert('Your session has expired. Please login again.', 'Session Expired', 'warning');
           
           return null;
+        }
+        
+        // Handle 404 for enrollment - likely not eligible
+        if (response.status === 404 && endpoint.includes('/courses/enroll/')) {
+          console.error('404 - Not eligible for enrollment');
+          return { error: 'not_eligible' };
         }
         
         const contentType = response.headers.get('content-type');
@@ -1182,18 +1467,66 @@
         console.log('Login successful! Token saved:', authToken);
         loginScreen.style.display = 'none';
         appScreen.classList.add('active');
+        
+        // Fetch user name and show greeting
+        fetchUserNameAndGreet();
       } else {
-        showAlert('Login failed. Please check your credentials.', 'error');
+        showLoginAlert('Login failed. Please check your credentials.', 'error');
       }
 
       loginBtn.disabled = false;
       loginBtn.innerHTML = '<span>Login to System</span>';
     });
+    
+    // Fetch user name from results and show greeting
+    async function fetchUserNameAndGreet() {
+      try {
+        // Try to fetch results to extract name
+        const result = await apiCall('/courses/results?page=1&limit=10&export=print', 'GET');
+        
+        if (result && result.isHtml && result.html) {
+          // Parse HTML to extract name
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(result.html, 'text/html');
+          
+          // Look for Name: field in the HTML (common pattern: "Name: Mr/Mrs/Miss ... ")
+          const nameMatch = result.html.match(/Name:\s*<\/td>\s*<td[^>]*>\s*([^<]+)/i);
+          if (nameMatch && nameMatch[1]) {
+            userName = nameMatch[1].trim();
+            localStorage.setItem('userName', userName);
+            console.log('Extracted user name:', userName);
+            // Update welcome title
+            updateWelcomeMessage(userName);
+          }
+        }
+        
+        // Show greeting
+        if (userName) {
+          await showCustomDialog({
+            title: 'Welcome Back!',
+            message: 'Hello ' + userName + '! Welcome to GCTU SIP Evaluation System. We\'re glad to have you here.',
+            type: 'success',
+            buttons: [{ text: 'Let\'s Start', action: 'ok', primary: true }]
+          });
+        }
+      } catch (error) {
+        console.log('Could not fetch user name:', error);
+        // Show generic greeting if name fetch fails
+        await showCustomDialog({
+          title: 'Welcome Back!',
+          message: 'Welcome to GCTU SIP Evaluation System. You have successfully logged in!',
+          type: 'success',
+          buttons: [{ text: 'Continue', action: 'ok', primary: true }]
+        });
+      }
+    }
 
     // Logout handler
     logoutBtn.addEventListener('click', function() {
       authToken = null;
+      userName = null;
       localStorage.removeItem('authToken');
+      localStorage.removeItem('userName');
       console.log('Logged out, token cleared');
       loginScreen.style.display = 'flex';
       appScreen.classList.remove('active');
@@ -1405,7 +1738,7 @@
         });
 
         if (selected.length === 0) {
-          alert('Please select at least one course');
+          showAlert('Please select at least one course to evaluate.', 'No Course Selected', 'warning');
           return;
         }
 
@@ -1927,20 +2260,24 @@
       if (data.semesterCourseList && Array.isArray(data.semesterCourseList)) {
         data.semesterCourseList.forEach(function(course) {
           console.log('Semester course:', course);
-          // Extract course object - it might be nested
+          // The course structure has: {class_id, course_id, course: {code, course_name, ...}}
           const courseObj = course.course || course;
-          // Extract all possible fields from various possible structures
-          const courseTitle = courseObj.course_name || courseObj.course_title || courseObj.title || 
-                             courseObj.name || courseObj.courseName || courseObj.courseTitle || 
-                             course.course_name || course.course_title || course.title || course.name || 'N/A';
+          
+          // Get title from nested course object
+          const courseTitle = courseObj.course_name || courseObj.name || courseObj.course_title || courseObj.title || 
+                             courseObj.courseName || courseObj.courseTitle || 
+                             course.course_name || course.name || course.course_title || course.title || 'N/A';
           const courseCode = courseObj.code || courseObj.course_code || courseObj.courseCode || 
                             course.code || course.course_code || course.courseCode || '';
+          const creditHours = courseObj.credit_hours || courseObj.credits || courseObj.creditHours || 
+                             course.credit_hours || course.credits || course.creditHours || '';
+          
+          console.log('Extracted - Code:', courseCode, 'Title:', courseTitle, 'Credits:', creditHours);
           
           allCourses.push({
             code: courseCode,
             title: courseTitle,
-            credit_hours: courseObj.credit_hours || courseObj.credits || courseObj.creditHours || 
-                         course.credit_hours || course.credits || course.creditHours || '',
+            credit_hours: creditHours,
             class_id: course.class_id || course.classId || courseObj.class_id || courseObj.classId || '',
             status: 'Not Registered'
           });
@@ -2066,13 +2403,35 @@
     
     // Register single course
     async function registerSingleCourse(classId, index) {
+      // Show loading
+      const loadingPromise = showAlert('Registering course, please wait...', 'Processing', 'info');
+      
       const result = await apiCall('/courses/enroll/' + classId + '?label=Register', 'GET');
       
-      if (result) {
-        alert('Course registered successfully!');
+      // Close all loading dialogs immediately
+      const overlays = document.querySelectorAll('.custom-dialog-overlay');
+      overlays.forEach(function(overlay) {
+        if (overlay && overlay.parentNode) {
+          document.body.removeChild(overlay);
+        }
+      });
+      
+      if (result && result.error === 'not_eligible') {
+        // User hasn't paid - show eligibility dialog immediately
+        // Use requestAnimationFrame to ensure DOM is clean before showing new dialog
+        requestAnimationFrame(function() {
+          showCustomDialog({
+            title: 'Enrollment Requirements Not Met',
+            message: 'You currently do not meet the eligibility criteria for course enrollment in the current semester. To proceed with course enrollment, kindly ensure that you have made a payment of at least 50% of your school fees to fulfill the enrollment requirements.',
+            type: 'warning',
+            buttons: [{ text: 'I Understand', action: 'ok', primary: true }]
+          });
+        });
+      } else if (result) {
+        await showAlert('Course registered successfully!', 'Success', 'success');
         loadRegistrationView(); // Reload
       } else {
-        alert('Failed to register course. Please try again.');
+        await showAlert('Failed to register course. Please try again later.', 'Registration Failed', 'error');
       }
     }
     
@@ -2082,6 +2441,7 @@
       
       let success = 0;
       let failed = 0;
+      let notEligible = false;
       
       for (let i = 0; i < courses.length; i++) {
         const course = courses[i];
@@ -2089,7 +2449,10 @@
         try {
           const result = await apiCall('/courses/enroll/' + course.class_id + '?label=Register', 'GET');
           
-          if (result) {
+          if (result && result.error === 'not_eligible') {
+            notEligible = true;
+            failed++;
+          } else if (result) {
             success++;
           } else {
             failed++;
@@ -2102,6 +2465,23 @@
       }
       
       // Show results
+      if (notEligible) {
+        // Clear the container first
+        container.innerHTML = '';
+        
+        // Show custom dialog for eligibility issue immediately
+        setTimeout(function() {
+          showCustomDialog({
+            title: 'Enrollment Requirements Not Met',
+            message: 'You currently do not meet the eligibility criteria for course enrollment in the current semester. To proceed with course enrollment, kindly ensure that you have made a payment of at least 50% of your school fees to fulfill the enrollment requirements.',
+            type: 'warning',
+            buttons: [{ text: 'I Understand', action: 'ok', primary: true }]
+          });
+        }, 0);
+        loadRegistrationView(); // Reload to show current state
+        return;
+      }
+      
       let html = '<div class="card">';
       html += '<div style="text-align: center; margin-bottom: 30px;">';
       
@@ -2192,7 +2572,7 @@
       const element = document.getElementById('printableRegistration');
 
       if (!element || !window.registrationOriginalHTML) {
-        alert('No content to download');
+        showAlert('No content available to download. Please try again.', 'Download Failed', 'error');
         return;
       }
 
@@ -2271,7 +2651,7 @@
         pdf.save('Course_Registration_' + new Date().toISOString().split('T')[0] + '.pdf');
       } catch (error) {
         console.error('PDF generation error:', error);
-        alert('Failed to generate PDF. Please try using Print instead.');
+        showAlert('Failed to generate PDF. Please try using the Print button instead.', 'PDF Generation Failed', 'error');
       } finally {
         document.body.removeChild(loadingOverlay);
       }
@@ -2322,7 +2702,7 @@
         const semester = document.getElementById('semesterSelectEval').value;
         
         if (year === '2025/2026') {
-          alert('Evaluations for 2025/2026 academic year are not yet available. Please select a previous year.');
+          showAlert('Evaluations for the 2025/2026 academic year are not yet available. Please select a previous year to evaluate lecturers.', 'Evaluation Not Available', 'info');
           return;
         }
         
@@ -2356,7 +2736,7 @@
         const semester = document.getElementById('semesterSelectEval').value;
         
         if (year === '2025/2026') {
-          alert('Evaluations for 2025/2026 academic year are not yet available. Please select a previous year.');
+          showAlert('Evaluations for the 2025/2026 academic year are not yet available. Please select a previous year to evaluate lecturers.', 'Evaluation Not Available', 'info');
           return;
         }
         
@@ -2405,7 +2785,7 @@
       const element = document.getElementById('printableResults');
       
       if (!element) {
-        alert('No results to download. Please try again.');
+        showAlert('No results available to download. Please try again.', 'Download Failed', 'error');
         return;
       }
       
@@ -2456,7 +2836,7 @@
                 // Increase font sizes for better PDF readability
                 if (computedStyle.fontSize) {
                   const currentSize = parseFloat(computedStyle.fontSize);
-                  el.style.fontSize = (currentSize * 1.15) + 'px'; // Increase by 15%
+                  el.style.fontSize = (currentSize * 1.35) + 'px'; // Increase by 35%
                 }
               });
             }
@@ -2527,7 +2907,7 @@
         if (loadingOverlay.parentNode) {
           document.body.removeChild(loadingOverlay);
         }
-        alert('Failed to generate PDF. Please try using the Print button instead.');
+        showAlert('Failed to generate PDF. Please try using the Print button instead.', 'PDF Generation Failed', 'error');
       }
     }
 
