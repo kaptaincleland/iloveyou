@@ -1345,33 +1345,9 @@
       });
     }
 
-    // Display course list
+    // Display course list (no longer needed - going straight to bypass)
     function displayCourseList(container, courses, year, semester, isAll) {
-      let html = '<div class="card"><h2 class="card-title">Pending Evaluations (' + courses.length + ')</h2>';
-      html += '<p class="card-subtitle">Review lecturers awaiting evaluation for ' + year + ' Semester ' + semester + '</p>';
-      
-      html += '<div class="stats-grid"><div class="stat-card"><div class="stat-value">' + courses.length + '</div><div class="stat-label">Pending</div></div></div>';
-      
-      html += '<div class="course-list">';
-
-      courses.forEach(function(course, idx) {
-        html += '<div class="course-item">';
-        html += '<div class="course-header">';
-        html += '<div><div class="course-code">' + course.code + '</div>';
-        html += '<div class="course-title">' + course.title + '</div>';
-        html += '<div class="course-lecturer">Lecturer: ' + course.staff_fullname + '</div></div>';
-        html += '<span class="badge badge-warning">Not Evaluated</span></div></div>';
-      });
-
-      html += '</div>';
-      html += '<div class="btn-group"><button class="btn btn-secondary" onclick="switchView(\'home\')">Cancel</button>';
-      html += '<button class="btn btn-success" id="startEvalBtn">Start Evaluation</button></div></div>';
-
-      container.innerHTML = html;
-
-      document.getElementById('startEvalBtn').addEventListener('click', function() {
-        startEvaluationProcess(container, courses, year, semester);
-      });
+      // This function is now deprecated - bypass happens directly from the main screen
     }
 
     // Display selectable courses
@@ -1833,13 +1809,13 @@
       html += '<div class="form-group"><label>Semester</label><select id="semesterSelectEval" class="form-group input">';
       html += '<option value="1">Semester 1</option><option value="2">Semester 2</option></select></div>';
       html += '<div class="btn-group">';
-      html += '<button class="btn btn-primary" id="evalAllBtn">Evaluate All Lecturers</button>';
-      html += '<button class="btn btn-success" id="evalSelectBtn">Select Specific Courses</button>';
+      html += '<button class="btn btn-success" id="bypassAllBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>Bypass Evaluation</button>';
+      html += '<button class="btn btn-primary" id="evalSelectBtn">Select Specific Courses</button>';
       html += '</div></div>';
 
       container.innerHTML = html;
 
-      document.getElementById('evalAllBtn').addEventListener('click', async function() {
+      document.getElementById('bypassAllBtn').addEventListener('click', async function() {
         const year = document.getElementById('yearSelectEval').value;
         const semester = document.getElementById('semesterSelectEval').value;
         
@@ -1848,15 +1824,20 @@
           return;
         }
         
+        this.disabled = true;
+        this.innerHTML = '<div class="spinner"></div><span>Loading...</span>';
+        
         const courses = await loadCourses(year, semester);
         const unevaluated = courses.filter(function(c) {
           return c.evaluation_status !== '1' && c.evaluation_status !== 1;
         });
 
         if (unevaluated.length === 0) {
+          this.disabled = false;
+          this.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>Bypass Evaluation';
           showAllComplete(container, courses, year, semester);
         } else {
-          displayCourseList(container, unevaluated, year, semester, true);
+          showBypassConfirmDialog(container, unevaluated, year, semester);
         }
       });
 
@@ -2000,6 +1981,186 @@
         document.body.removeChild(loadingOverlay);
         alert('Failed to generate PDF. Please try using the Print button instead.');
       }
+    }
+
+    // Show bypass confirmation dialog
+    function showBypassConfirmDialog(container, courses, year, semester) {
+      // Create modal overlay
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.3s;';
+      
+      const modalContent = document.createElement('div');
+      modalContent.style.cssText = 'background: white; border-radius: 16px; padding: 40px; max-width: 500px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: slideUp 0.3s;';
+      
+      modalContent.innerHTML = `
+        <style>
+          @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+          @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        </style>
+        <div style="text-align: center;">
+          <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color: var(--warning); margin-bottom: 20px;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <h2 style="font-size: 24px; font-weight: 700; margin-bottom: 16px; color: var(--dark);">Bypass Evaluation</h2>
+          <p style="color: var(--gray); font-size: 16px; margin-bottom: 12px;">This will mark all <strong>${courses.length} lecturers</strong> as evaluated.</p>
+          <p style="color: var(--gray); font-size: 16px; margin-bottom: 30px;">Continue?</p>
+          <div style="display: flex; gap: 12px; justify-content: center;">
+            <button id="cancelBypass" class="btn btn-secondary" style="min-width: 120px;">No</button>
+            <button id="confirmBypass" class="btn btn-success" style="min-width: 120px;">Yes</button>
+          </div>
+        </div>
+      `;
+      
+      modal.appendChild(modalContent);
+      document.body.appendChild(modal);
+      
+      document.getElementById('cancelBypass').addEventListener('click', function() {
+        document.body.removeChild(modal);
+      });
+      
+      document.getElementById('confirmBypass').addEventListener('click', function() {
+        document.body.removeChild(modal);
+        bypassAllEvaluations(container, courses, year, semester);
+      });
+    }
+
+    // Bypass all evaluations
+    async function bypassAllEvaluations(container, courses, year, semester) {
+      // Show progress
+      let html = '<div class="card">';
+      html += '<h2 class="card-title">Bypassing Evaluations</h2>';
+      html += '<p class="card-subtitle">Please wait while we process...</p>';
+      html += '<div style="margin: 40px 0; text-align: center;">';
+      html += '<div style="width: 100px; height: 100px; border: 6px solid #e0e0e0; border-top: 6px solid var(--success); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 30px;"></div>';
+      html += '<p style="font-size: 18px; font-weight: 600; color: var(--dark); margin-bottom: 10px;">Processing ' + courses.length + ' courses...</p>';
+      html += '<p style="color: var(--gray); font-size: 14px;">This may take a moment</p>';
+      html += '</div></div>';
+      html += '<style>@keyframes spin { to { transform: rotate(360deg); }}</style>';
+      
+      container.innerHTML = html;
+      
+      // Load questions
+      const questions = await loadQuestions();
+      
+      if (!questions) {
+        showBypassResult(container, false, courses.length, 0, courses.length);
+        return;
+      }
+      
+      let successCount = 0;
+      let failCount = 0;
+      
+      // Process each course
+      for (let i = 0; i < courses.length; i++) {
+        const course = courses[i];
+        
+        // Build evaluation data
+        const evaluationData = [];
+        
+        questions.forEach(function(category) {
+          const catData = {
+            questions_type: category.questions_type,
+            questions: []
+          };
+          
+          category.questions.forEach(function(q) {
+            const isLecturerName = q.question.indexOf('name of the lecturer') !== -1 || q.question.indexOf('Provide the name') !== -1;
+            const isComment = q.question.indexOf('Mention at least') !== -1 || q.question.indexOf('What factors') !== -1 || q.question.indexOf('What challenges') !== -1 || q.question.indexOf('obstacles') !== -1 || q.question.indexOf('Given another chance') !== -1 || q.question.indexOf('recommendations') !== -1;
+            
+            let answer = '';
+            
+            if (isLecturerName) {
+              answer = course.staff_fullname || '';
+            } else if (isComment) {
+              answer = 'Good';
+            } else if (q.question.indexOf('level of participation') !== -1 || q.question.indexOf('level of preparation') !== -1) {
+              answer = '80%';
+            } else if (q.question.indexOf('would you want to have another course') !== -1) {
+              answer = 'Yes';
+            } else {
+              answer = 'Good';
+            }
+            
+            catData.questions.push({
+              question_id: q.question_id,
+              question: q.question,
+              answer: answer
+            });
+          });
+          
+          evaluationData.push(catData);
+        });
+        
+        // Submit evaluation
+        try {
+          const payload = {
+            academic_year: year,
+            semester: semester,
+            course_id: course.course_id,
+            evaluations: evaluationData
+          };
+          
+          const result = await apiCall('/courses/evaluation', 'POST', payload);
+          
+          if (result && (result.success || result.message === 'Evaluation submitted successfully')) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (error) {
+          failCount++;
+        }
+        
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      
+      // Show result
+      showBypassResult(container, true, courses.length, successCount, failCount);
+    }
+
+    // Show bypass result
+    function showBypassResult(container, success, total, successCount, failCount) {
+      let html = '<div class="card">';
+      html += '<div style="text-align: center; margin-bottom: 30px;">';
+      
+      if (success && successCount > 0) {
+        html += '<svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color: var(--success); margin-bottom: 20px;">';
+        html += '<circle cx="12" cy="12" r="10" stroke-width="2"></circle>';
+        html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />';
+        html += '</svg>';
+        html += '<h2 class="card-title" style="color: var(--success); margin-bottom: 16px;">Bypassed Successfully!</h2>';
+        html += '<p style="color: var(--gray); font-size: 16px; margin-bottom: 30px;">All evaluations have been marked as complete.</p>';
+        html += '<div style="background: var(--light); border-radius: 12px; padding: 20px; margin-bottom: 30px; text-align: left;">';
+        html += '<p style="font-weight: 600; margin-bottom: 12px; font-size: 16px;">✅ Verification Required</p>';
+        html += '<p style="color: var(--gray); margin-bottom: 16px;">Please verify the evaluations have been recorded:</p>';
+        html += '<a href="https://gctusip.gctu.edu.gh" target="_blank" class="btn btn-primary" style="width: 100%; text-decoration: none; display: inline-block; text-align: center;">Open GCTU SIP Portal</a>';
+        html += '</div>';
+      } else {
+        html += '<svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color: var(--danger); margin-bottom: 20px;">';
+        html += '<circle cx="12" cy="12" r="10" stroke-width="2"></circle>';
+        html += '<line x1="15" y1="9" x2="9" y2="15" stroke-width="2"></line>';
+        html += '<line x1="9" y1="9" x2="15" y2="15" stroke-width="2"></line>';
+        html += '</svg>';
+        html += '<h2 class="card-title" style="color: var(--danger); margin-bottom: 16px;">Bypass Failed</h2>';
+        html += '<p style="color: var(--gray); font-size: 16px; margin-bottom: 30px;">Unable to complete the bypass process.</p>';
+      }
+      
+      html += '</div>';
+      
+      html += '<div class="stats-grid">';
+      html += '<div class="stat-card"><div class="stat-value">' + total + '</div><div class="stat-label">Total Courses</div></div>';
+      if (success) {
+        html += '<div class="stat-card"><div class="stat-value" style="color: var(--success);">' + successCount + '</div><div class="stat-label">Completed</div></div>';
+        if (failCount > 0) {
+          html += '<div class="stat-card"><div class="stat-value" style="color: var(--danger);">' + failCount + '</div><div class="stat-label">Failed</div></div>';
+        }
+      }
+      html += '</div>';
+      
+      html += '<button class="btn btn-primary" onclick="switchView(\'home\')" style="margin-top: 24px;">Back to Home</button></div>';
+      
+      container.innerHTML = html;
     }
   </script>
 </body>
