@@ -1113,10 +1113,20 @@
         const response = await fetch(API_BASE + endpoint, options);
         console.log('Response status:', response.status, response.statusText);
         
-        // Handle 401 Unauthorized
+        // Handle 401 Unauthorized - token expired
         if (response.status === 401) {
           console.error('Unauthorized - token expired or invalid');
-          return { error: 'Unauthorized - Please login again', status: 401 };
+          
+          // Clear invalid token and force re-login
+          authToken = null;
+          localStorage.removeItem('authToken');
+          
+          // Show login screen with message
+          loginScreen.style.display = 'flex';
+          appScreen.classList.remove('active');
+          showAlert('Your session has expired. Please login again.', 'error');
+          
+          return null;
         }
         
         const contentType = response.headers.get('content-type');
@@ -1828,6 +1838,14 @@
         this.innerHTML = '<div class="spinner"></div><span>Loading...</span>';
         
         const courses = await loadCourses(year, semester);
+        
+        // Check if token expired (courses will be null)
+        if (!courses) {
+          this.disabled = false;
+          this.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>Bypass Evaluation';
+          return;
+        }
+        
         const unevaluated = courses.filter(function(c) {
           return c.evaluation_status !== '1' && c.evaluation_status !== 1;
         });
@@ -1851,6 +1869,12 @@
         }
         
         const courses = await loadCourses(year, semester);
+        
+        // Check if token expired (courses will be null)
+        if (!courses) {
+          return;
+        }
+        
         const unevaluated = courses.filter(function(c) {
           return c.evaluation_status !== '1' && c.evaluation_status !== 1;
         });
