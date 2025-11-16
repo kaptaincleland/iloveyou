@@ -2111,7 +2111,8 @@
           
           console.log('Result for', course.code, ':', result);
           
-          if (result && (result.success || result.message === 'Evaluation submitted successfully')) {
+          // Success if we got an evaluation_id back
+          if (result && result.evaluation_id) {
             successCount++;
             console.log('✅ Success for', course.code);
           } else {
