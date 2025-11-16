@@ -972,6 +972,7 @@
       <div class="navbar-content" id="navbar">
         <div class="nav-item active" data-view="home">Home</div>
         <div class="nav-item" data-view="evaluate">Evaluate Lecturers</div>
+        <div class="nav-item" data-view="registration">Course Registration</div>
         <div class="nav-item" data-view="results">View Results</div>
         <div class="nav-item" data-view="about">About</div>
       </div>
@@ -991,6 +992,14 @@
               </svg>
               <h3>Evaluate Lecturers</h3>
               <p>Evaluate all pending lecturers or select specific courses</p>
+            </div>
+            
+            <div class="action-card" style="background: linear-gradient(135deg, #10b981, #059669);" data-action="registration">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+              </svg>
+              <h3>Course Registration</h3>
+              <p>View and register for your courses</p>
             </div>
             
             <div class="action-card" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);" data-action="results">
@@ -1020,7 +1029,10 @@
       
       <!-- Results View -->
       <div id="resultsView" class="view-content hidden"></div>
-      
+
+      <!-- Registration View -->
+      <div id="registrationView" class="view-content hidden"></div>
+
       <!-- About View -->
       <div id="aboutView" class="view-content hidden">
         <div class="card">
@@ -1229,6 +1241,9 @@
       } else if (view === 'evaluate') {
         document.getElementById('evaluateView').classList.remove('hidden');
         loadEvaluateOptions();
+      } else if (view === 'registration') {
+        document.getElementById('registrationView').classList.remove('hidden');
+        loadRegistrationView();
       } else if (view === 'results') {
         document.getElementById('resultsView').classList.remove('hidden');
         loadResultsView();
@@ -1668,7 +1683,7 @@
         html += '<button class="btn btn-secondary" onclick="switchView(\'home\')">Back to Home</button>';
         html += '</div>';
         html += '<div id="printableResults" style="overflow-x: auto;">' + htmlContent + '</div>';
-        html += '<style>#printableResults table { font-size: 14px !important; } #printableResults th { font-size: 15px !important; padding: 10px !important; } #printableResults td { font-size: 14px !important; padding: 10px !important; } #printableResults h1 { font-size: 22px !important; } #printableResults h2 { font-size: 20px !important; } #printableResults h3 { font-size: 18px !important; } #printableResults h4, #printableResults h5, #printableResults h6 { font-size: 16px !important; }</style>';
+        html += '<style>#printableResults table { font-size: 18px !important; } #printableResults th { font-size: 19px !important; padding: 12px !important; } #printableResults td { font-size: 18px !important; padding: 12px !important; } #printableResults h1 { font-size: 28px !important; } #printableResults h2 { font-size: 26px !important; } #printableResults h3 { font-size: 24px !important; } #printableResults h4, #printableResults h5, #printableResults h6 { font-size: 20px !important; } #printableResults p, #printableResults small { font-size: 16px !important; }</style>';
         html += '</div>';
         container.innerHTML = html;
         return;
@@ -1787,6 +1802,483 @@
       
       container.innerHTML = html;
     }
+
+    // ====================
+    // COURSE REGISTRATION
+    // ====================
+    
+    // Load Registration View
+    async function loadRegistrationView() {
+      const container = document.getElementById('registrationView');
+      container.innerHTML = '<div class="card"><h2 class="card-title">Loading courses...</h2></div>';
+      
+      const data = await apiCall('/courses/index/', 'GET');
+      
+      console.log('Registration data received:', data);
+      
+      if (!data) {
+        return; // Token expired, handled by apiCall
+      }
+      
+      // Handle both JSON and HTML responses
+      if (data.html && data.isHtml) {
+        // HTML response - parse it
+        displayCoursesFromHTML(container, data.html);
+      } else if (data && data.semesterCourseList) {
+        // Handle the actual API response structure
+        displayCoursesListWithRegistration(container, data);
+      } else if (data && Array.isArray(data)) {
+        displayCoursesList(container, data);
+      } else if (data && data.courses) {
+        displayCoursesList(container, data.courses);
+      } else {
+        container.innerHTML = '<div class="card"><h2 class="card-title">No Courses Found</h2><p>No courses available for registration.</p></div>';
+      }
+    }
+    
+    // Display courses from HTML
+    function displayCoursesFromHTML(container, htmlContent) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, 'text/html');
+      
+      // Try multiple table selectors
+      let rows = doc.querySelectorAll('table tbody tr');
+      if (rows.length === 0) {
+        rows = doc.querySelectorAll('table tr');
+      }
+      
+      console.log('Found', rows.length, 'rows in HTML');
+      
+      const courses = [];
+      rows.forEach(function(row, index) {
+        const cells = row.querySelectorAll('td');
+        
+        // Skip header rows
+        if (cells.length === 0) {
+          const headers = row.querySelectorAll('th');
+          if (headers.length > 0) {
+            console.log('Skipping header row', index);
+            return;
+          }
+        }
+        
+        if (cells.length >= 3) {
+          const actionCell = cells[cells.length - 1];
+          const links = actionCell.querySelectorAll('a');
+          let classId = '';
+          let status = 'Not Registered';
+          
+          console.log('Row', index, 'cells:', cells.length, 'action cell:', actionCell.innerHTML);
+          
+          // Check for register link
+          links.forEach(function(link) {
+            const href = link.getAttribute('href') || '';
+            const text = link.textContent.trim().toLowerCase();
+            
+            console.log('Link:', text, 'href:', href);
+            
+            if (text.includes('register') && !text.includes('registered')) {
+              const match = href.match(/\/courses\/enroll\/([^/?]+)/);
+              if (match) {
+                classId = match[1];
+                status = 'Not Registered';
+                console.log('Found register link, classId:', classId);
+              }
+            } else if (text.includes('registered') || text === 'view' || href.includes('registered')) {
+              status = 'Registered';
+              console.log('Course is registered');
+            }
+          });
+          
+          // If no links but cell contains "Registered" text
+          if (!classId && actionCell.textContent.trim().toLowerCase().includes('registered')) {
+            status = 'Registered';
+          }
+          
+          const course = {
+            code: cells[0].textContent.trim(),
+            title: cells[1].textContent.trim(),
+            credit_hours: cells[2] ? cells[2].textContent.trim() : '',
+            status: status,
+            class_id: classId || ''
+          };
+          
+          console.log('Parsed course:', course);
+          courses.push(course);
+        }
+      });
+      
+      console.log('Total courses parsed:', courses.length);
+      
+      if (courses.length > 0) {
+        displayCoursesList(container, courses);
+      } else {
+        container.innerHTML = '<div class="card"><h2 class="card-title">No Courses Found</h2><p>No courses available for registration.</p></div>';
+      }
+    }
+    
+    // Display courses from registration data structure
+    function displayCoursesListWithRegistration(container, data) {
+      const allCourses = [];
+      
+      console.log('Processing registration data:', data);
+      
+      // Process semester courses
+      if (data.semesterCourseList && Array.isArray(data.semesterCourseList)) {
+        data.semesterCourseList.forEach(function(course) {
+          console.log('Semester course:', course);
+          // Extract course object - it might be nested
+          const courseObj = course.course || course;
+          // Extract all possible fields from various possible structures
+          const courseTitle = courseObj.course_name || courseObj.course_title || courseObj.title || 
+                             courseObj.name || courseObj.courseName || courseObj.courseTitle || 
+                             course.course_name || course.course_title || course.title || course.name || 'N/A';
+          const courseCode = courseObj.code || courseObj.course_code || courseObj.courseCode || 
+                            course.code || course.course_code || course.courseCode || '';
+          
+          allCourses.push({
+            code: courseCode,
+            title: courseTitle,
+            credit_hours: courseObj.credit_hours || courseObj.credits || courseObj.creditHours || 
+                         course.credit_hours || course.credits || course.creditHours || '',
+            class_id: course.class_id || course.classId || courseObj.class_id || courseObj.classId || '',
+            status: 'Not Registered'
+          });
+        });
+      }
+      
+      // Mark enrolled courses as registered
+      if (data.enrolledCoueseList && Array.isArray(data.enrolledCoueseList)) {
+        data.enrolledCoueseList.forEach(function(enrolled) {
+          console.log('Enrolled course:', enrolled);
+          const courseObj = enrolled.course || enrolled;
+          const courseTitle = courseObj.course_name || courseObj.course_title || courseObj.title || 
+                             courseObj.name || courseObj.courseName || courseObj.courseTitle || 
+                             enrolled.course_name || enrolled.course_title || enrolled.title || enrolled.name || 'N/A';
+          const courseCode = courseObj.code || courseObj.course_code || courseObj.courseCode || 
+                            enrolled.code || enrolled.course_code || enrolled.courseCode || '';
+          
+          const course = allCourses.find(c => c.class_id === (enrolled.class_id || enrolled.classId));
+          if (course) {
+            course.status = 'Registered';
+            // Update title if not set properly
+            if (course.title === 'N/A' && courseTitle !== 'N/A') {
+              course.title = courseTitle;
+            }
+            if (course.code === '' && courseCode !== '') {
+              course.code = courseCode;
+            }
+          } else {
+            // Add enrolled course if not in semester list
+            allCourses.push({
+              code: courseCode,
+              title: courseTitle,
+              credit_hours: courseObj.credit_hours || courseObj.credits || courseObj.creditHours || 
+                           enrolled.credit_hours || enrolled.credits || enrolled.creditHours || '',
+              class_id: enrolled.class_id || enrolled.classId || '',
+              status: 'Registered'
+            });
+          }
+        });
+      }
+      
+      console.log('Processed courses:', allCourses);
+      
+      if (allCourses.length > 0) {
+        displayCoursesList(container, allCourses);
+      } else {
+        container.innerHTML = '<div class="card"><h2 class="card-title">No Courses Found</h2><p>No courses available for registration.</p></div>';
+      }
+    }
+    
+    // Display courses list
+    function displayCoursesList(container, courses) {
+      const registered = courses.filter(c => c.status === 'Registered' || c.status === '1' || c.status === 1);
+      const notRegistered = courses.filter(c => c.status !== 'Registered' && c.status !== '1' && c.status !== 1);
+      
+      let html = '<div class="card">';
+      html += '<h2 class="card-title">Course Registration</h2>';
+      html += '<p class="card-subtitle">Manage your course registrations</p>';
+      
+      html += '<div class="stats-grid" style="margin: 30px 0;">';
+      html += '<div class="stat-card"><div class="stat-value">' + courses.length + '</div><div class="stat-label">Total Courses</div></div>';
+      html += '<div class="stat-card"><div class="stat-value" style="color: var(--success);">' + registered.length + '</div><div class="stat-label">Registered</div></div>';
+      html += '<div class="stat-card"><div class="stat-value" style="color: var(--danger);">' + notRegistered.length + '</div><div class="stat-label">Not Registered</div></div>';
+      html += '</div>';
+      
+      if (notRegistered.length > 0) {
+        html += '<div style="margin-bottom: 24px; display: flex; gap: 12px; flex-wrap: wrap;">';
+        html += '<button class="btn btn-primary" id="registerAllBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>Register All Courses</button>';
+        html += '<button class="btn btn-success" id="viewRegistrationBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>Print/Download</button>';
+        html += '</div>';
+      } else {
+        html += '<div style="margin-bottom: 24px;">';
+        html += '<button class="btn btn-success" id="viewRegistrationBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>Print/Download</button>';
+        html += '</div>';
+      }
+      
+      html += '<table style="width: 100%; border-collapse: collapse; margin-top: 20px;">';
+      html += '<thead style="background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white;">';
+      html += '<tr><th style="padding: 18px; text-align: left; font-weight: 700; font-size: 15px; text-transform: uppercase;">Course Code</th>';
+      html += '<th style="padding: 18px; text-align: left; font-weight: 700; font-size: 15px; text-transform: uppercase;">Course Title</th>';
+      html += '<th style="padding: 18px; text-align: left; font-weight: 700; font-size: 15px; text-transform: uppercase;">Credits</th>';
+      html += '<th style="padding: 18px; text-align: center; font-weight: 700; font-size: 15px; text-transform: uppercase;">Status</th>';
+      html += '<th style="padding: 18px; text-align: center; font-weight: 700; font-size: 15px; text-transform: uppercase;">Action</th></tr>';
+      html += '</thead><tbody>';
+      
+      courses.forEach(function(course, index) {
+        const isRegistered = course.status === 'Registered' || course.status === '1' || course.status === 1;
+        const statusBadge = isRegistered
+          ? '<span style="background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: var(--success); padding: 6px 16px; border-radius: 20px; font-weight: 600; font-size: 13px;">Registered</span>'
+          : '<span style="background: linear-gradient(135deg, #fee, #fcc); color: var(--danger); padding: 6px 16px; border-radius: 20px; font-weight: 600; font-size: 13px;">Not Registered</span>';
+        
+        const actionBtn = isRegistered
+          ? '<span style="color: var(--gray); font-size: 13px;">-</span>'
+          : '<button class="btn btn-sm btn-primary" onclick="registerSingleCourse(\'' + course.class_id + '\', ' + index + ')">Register</button>';
+        
+        html += '<tr style="border-bottom: 1px solid var(--border);">';
+        html += '<td style="padding: 16px; font-weight: 600; color: var(--primary);">' + (course.code || 'N/A') + '</td>';
+        html += '<td style="padding: 16px;">' + (course.title || course.name || 'N/A') + '</td>';
+        html += '<td style="padding: 16px;">' + (course.credit_hours || course.credits || 'N/A') + '</td>';
+        html += '<td style="padding: 16px; text-align: center;">' + statusBadge + '</td>';
+        html += '<td style="padding: 16px; text-align: center;">' + actionBtn + '</td>';
+        html += '</tr>';
+      });
+      
+      html += '</tbody></table></div>';
+      
+      container.innerHTML = html;
+      
+      // Attach event listeners
+      if (notRegistered.length > 0) {
+        document.getElementById('registerAllBtn').addEventListener('click', function() {
+          registerAllCourses(container, notRegistered);
+        });
+      }
+      
+      const viewBtn = document.getElementById('viewRegistrationBtn');
+      if (viewBtn) {
+        viewBtn.addEventListener('click', function() {
+          loadRegistrationPrintView(container);
+        });
+      }
+    }
+    
+    // Register single course
+    async function registerSingleCourse(classId, index) {
+      const result = await apiCall('/courses/enroll/' + classId + '?label=Register', 'GET');
+      
+      if (result) {
+        alert('Course registered successfully!');
+        loadRegistrationView(); // Reload
+      } else {
+        alert('Failed to register course. Please try again.');
+      }
+    }
+    
+    // Register all courses
+    async function registerAllCourses(container, courses) {
+      container.innerHTML = '<div class="card"><h2 class="card-title">Registering Courses...</h2><p class="card-subtitle">Please wait while we register your courses</p><div style="margin: 40px 0; text-align: center;"><div style="width: 100px; height: 100px; border: 6px solid #e0e0e0; border-top: 6px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 30px;"></div><p style="font-size: 18px; font-weight: 600; color: var(--dark); margin-bottom: 10px;">Processing ' + courses.length + ' courses...</p></div></div><style>@keyframes spin { to { transform: rotate(360deg); }}</style>';
+      
+      let success = 0;
+      let failed = 0;
+      
+      for (let i = 0; i < courses.length; i++) {
+        const course = courses[i];
+        
+        try {
+          const result = await apiCall('/courses/enroll/' + course.class_id + '?label=Register', 'GET');
+          
+          if (result) {
+            success++;
+          } else {
+            failed++;
+          }
+        } catch (error) {
+          failed++;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      
+      // Show results
+      let html = '<div class="card">';
+      html += '<div style="text-align: center; margin-bottom: 30px;">';
+      
+      if (success > 0) {
+        html += '<svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color: var(--success); margin-bottom: 20px;">';
+        html += '<circle cx="12" cy="12" r="10" stroke-width="2"></circle>';
+        html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4" />';
+        html += '</svg>';
+        html += '<h2 class="card-title" style="color: var(--success); margin-bottom: 16px;">Registration Successful!</h2>';
+        html += '<p style="color: var(--gray); font-size: 16px; margin-bottom: 30px;">Your courses have been registered successfully.</p>';
+      } else {
+        html += '<svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color: var(--danger); margin-bottom: 20px;">';
+        html += '<circle cx="12" cy="12" r="10" stroke-width="2"></circle>';
+        html += '<line x1="15" y1="9" x2="9" y2="15" stroke-width="2"></line>';
+        html += '<line x1="9" y1="9" x2="15" y2="15" stroke-width="2"></line>';
+        html += '</svg>';
+        html += '<h2 class="card-title" style="color: var(--danger); margin-bottom: 16px;">Registration Failed</h2>';
+        html += '<p style="color: var(--gray); font-size: 16px; margin-bottom: 30px;">Unable to register courses.</p>';
+      }
+      
+      html += '</div>';
+      
+      html += '<div class="stats-grid">';
+      html += '<div class="stat-card"><div class="stat-value">' + courses.length + '</div><div class="stat-label">Total</div></div>';
+      html += '<div class="stat-card"><div class="stat-value" style="color: var(--success);">' + success + '</div><div class="stat-label">Registered</div></div>';
+      if (failed > 0) {
+        html += '<div class="stat-card"><div class="stat-value" style="color: var(--danger);">' + failed + '</div><div class="stat-label">Failed</div></div>';
+      }
+      html += '</div>';
+      
+      html += '<div style="margin-top: 30px; display: flex; gap: 12px; justify-content: center;">';
+      html += '<button class="btn btn-primary" onclick="loadRegistrationView()">View Registration</button>';
+      html += '<button class="btn btn-secondary" onclick="switchView(\'home\')">Back to Home</button>';
+      html += '</div></div>';
+      
+      container.innerHTML = html;
+    }
+    
+    // Load print view for registration
+    async function loadRegistrationPrintView(container) {
+      container.innerHTML = '<div class="card"><h2 class="card-title">Loading preview...</h2></div>';
+
+      const htmlData = await apiCall('/courses/index/?export=print', 'GET');
+
+      if (!htmlData) {
+        return;
+      }
+
+      if (htmlData.html) {
+        // Store the original HTML for PDF generation
+        window.registrationOriginalHTML = htmlData.html;
+        
+        // HTML response - display with minimal wrapper
+        let html = '<div class="card">';
+        html += '<div style="margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap;" class="no-print">';
+        html += '<button class="btn btn-success" onclick="downloadRegistrationPDF()"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>Download PDF</button>';
+        html += '<button class="btn btn-primary" onclick="printRegistration()"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>Print</button>';
+        html += '<button class="btn btn-secondary" onclick="loadRegistrationView()">Back</button>';
+        html += '</div>';
+        
+        // Add print styles
+        html += '<style>';
+        html += '@media print { ';
+        html += '  .no-print, .btn { display: none !important; }';
+        html += '  body { margin: 0; padding: 0; background: white; }';
+        html += '  .card { border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; background: white !important; }';
+        html += '  @page { margin: 10mm; size: A4; }';
+        html += '}';
+        html += '</style>';
+        
+        // Add the original HTML content directly
+        html += '<div id="printableRegistration">' + htmlData.html + '</div>';
+        html += '</div>';
+
+        container.innerHTML = html;
+      } else {
+        container.innerHTML = '<div class="card"><h2 class="card-title">Preview Not Available</h2><p>Unable to load registration preview.</p><button class="btn btn-secondary" onclick="loadRegistrationView()">Back</button></div>';
+      }
+    }
+    
+    // Print registration function
+    window.printRegistration = function() {
+      window.print();
+    };
+    
+    // Download registration as PDF
+    window.downloadRegistrationPDF = async function() {
+      const element = document.getElementById('printableRegistration');
+
+      if (!element || !window.registrationOriginalHTML) {
+        alert('No content to download');
+        return;
+      }
+
+      // Show loading indicator
+      const loadingOverlay = document.createElement('div');
+      loadingOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center;';
+      loadingOverlay.innerHTML = '<div style="background: white; padding: 40px 50px; border-radius: 16px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.3);"><div style="width: 60px; height: 60px; border: 4px solid #e0e0e0; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div><p style="color: var(--dark); font-weight: 700; font-size: 18px; margin-bottom: 8px;">Generating PDF...</p><p style="color: var(--gray); font-size: 14px;">Please wait a moment</p></div><style>@keyframes spin { to { transform: rotate(360deg); }}</style>';
+      document.body.appendChild(loadingOverlay);
+
+      try {
+        // Create a wrapper with the original HTML
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'position: fixed; left: -9999px; top: 0; width: 1200px; padding: 40px; box-sizing: border-box; background: white;';
+        wrapper.innerHTML = window.registrationOriginalHTML;
+        document.body.appendChild(wrapper);
+
+        // Wait for rendering
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Capture with html2canvas
+        const canvas = await html2canvas(wrapper, {
+          scale: 2.5,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          windowWidth: 1200,
+          windowHeight: wrapper.scrollHeight,
+          onclone: function(clonedDoc) {
+            const cloned = clonedDoc.body.querySelector('div');
+            if (cloned) {
+              cloned.style.left = '0';
+              cloned.style.position = 'relative';
+              
+              // Increase font sizes for better PDF readability
+              const allElements = cloned.querySelectorAll('*');
+              allElements.forEach(function(el) {
+                const computedStyle = window.getComputedStyle(el);
+                if (computedStyle.fontSize) {
+                  const currentSize = parseFloat(computedStyle.fontSize);
+                  el.style.fontSize = (currentSize * 1.35) + 'px'; // Increase by 35%
+                }
+              });
+            }
+          }
+        });
+
+        // Remove wrapper
+        document.body.removeChild(wrapper);
+
+        // Create PDF
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jspdf.jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = pdfWidth;
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+          heightLeft -= pdfHeight;
+        }
+
+        pdf.save('Course_Registration_' + new Date().toISOString().split('T')[0] + '.pdf');
+      } catch (error) {
+        console.error('PDF generation error:', error);
+        alert('Failed to generate PDF. Please try using Print instead.');
+      } finally {
+        document.body.removeChild(loadingOverlay);
+      }
+    };
+
+    window.loadRegistrationView = loadRegistrationView;
+    window.registerSingleCourse = registerSingleCourse;
 
     // Load Evaluate Options (new unified entry point)
     async function loadEvaluateOptions() {
@@ -1923,23 +2415,23 @@
       loadingOverlay.innerHTML = '<div style="background: white; padding: 40px 50px; border-radius: 16px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.3);"><div style="width: 60px; height: 60px; border: 4px solid #e0e0e0; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div><p style="color: var(--dark); font-weight: 700; font-size: 18px; margin-bottom: 8px;">Generating PDF...</p><p style="color: var(--gray); font-size: 14px;">Please wait a moment</p></div><style>@keyframes spin { to { transform: rotate(360deg); }}</style>';
       document.body.appendChild(loadingOverlay);
       
+      let wrapper = null;
+      
       try {
         // Clone the element to avoid modifying the original
         const clonedElement = element.cloneNode(true);
         
         // Create a wrapper with proper styling
-        const wrapper = document.createElement('div');
-        wrapper.style.cssText = 'width: 100%; max-width: 100%; padding: 20px; box-sizing: border-box; background: white;';
+        wrapper = document.createElement('div');
+        wrapper.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 1200px; padding: 20px; box-sizing: border-box; background: white; opacity: 0; pointer-events: none;';
         wrapper.appendChild(clonedElement);
         
         // Temporarily add to body for html2canvas
-        wrapper.style.position = 'absolute';
-        wrapper.style.left = '-9999px';
         document.body.appendChild(wrapper);
         
-        // Use html2canvas to capture the element with optimized settings
+        // Use html2canvas to capture the element with higher quality
         const canvas = await html2canvas(wrapper, {
-          scale: 2,
+          scale: 3,
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff',
@@ -1947,13 +2439,37 @@
           allowTaint: false,
           foreignObjectRendering: false,
           windowWidth: 1200,
-          windowHeight: wrapper.scrollHeight
+          windowHeight: wrapper.scrollHeight,
+          imageTimeout: 0,
+          removeContainer: false,
+          onclone: function(clonedDoc) {
+            const clonedWrapper = clonedDoc.body.querySelector('div');
+            if (clonedWrapper) {
+              // Ensure colors are preserved and increase font sizes
+              const allElements = clonedWrapper.querySelectorAll('*');
+              allElements.forEach(function(el) {
+                const computedStyle = window.getComputedStyle(el);
+                if (computedStyle.color) el.style.color = computedStyle.color;
+                if (computedStyle.backgroundColor) el.style.backgroundColor = computedStyle.backgroundColor;
+                if (computedStyle.borderColor) el.style.borderColor = computedStyle.borderColor;
+                
+                // Increase font sizes for better PDF readability
+                if (computedStyle.fontSize) {
+                  const currentSize = parseFloat(computedStyle.fontSize);
+                  el.style.fontSize = (currentSize * 1.15) + 'px'; // Increase by 15%
+                }
+              });
+            }
+          }
         });
         
-        // Remove the temporary wrapper
-        document.body.removeChild(wrapper);
+        // Remove the temporary wrapper immediately
+        if (wrapper && wrapper.parentNode) {
+          document.body.removeChild(wrapper);
+          wrapper = null;
+        }
         
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const imgData = canvas.toDataURL('image/png', 1.0);
         
         // Create PDF using jsPDF
         const { jsPDF } = window.jspdf;
@@ -1964,7 +2480,7 @@
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
         
         const pdf = new jsPDF({
-          orientation: imgHeight > imgWidth ? 'portrait' : 'portrait',
+          orientation: 'portrait',
           unit: 'mm',
           format: 'a4',
           compress: true
@@ -1973,15 +2489,15 @@
         let heightLeft = imgHeight;
         let position = 0;
         
-        // Add first page
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, '', 'FAST');
+        // Add first page with PNG for better color
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, '', 'FAST');
         heightLeft -= pageHeight;
         
         // Add additional pages if needed
         while (heightLeft > 0) {
           position = heightLeft - imgHeight;
           pdf.addPage();
-          pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, '', 'FAST');
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, '', 'FAST');
           heightLeft -= pageHeight;
         }
         
@@ -1996,13 +2512,21 @@
           loadingOverlay.style.opacity = '0';
           loadingOverlay.style.transition = 'opacity 0.3s';
           setTimeout(function() {
-            document.body.removeChild(loadingOverlay);
+            if (loadingOverlay.parentNode) {
+              document.body.removeChild(loadingOverlay);
+            }
           }, 300);
         }, 500);
         
       } catch (error) {
         console.error('PDF generation error:', error);
-        document.body.removeChild(loadingOverlay);
+        // Clean up wrapper if it still exists
+        if (wrapper && wrapper.parentNode) {
+          document.body.removeChild(wrapper);
+        }
+        if (loadingOverlay.parentNode) {
+          document.body.removeChild(loadingOverlay);
+        }
         alert('Failed to generate PDF. Please try using the Print button instead.');
       }
     }
